@@ -3,5 +3,4 @@ streamlit-webrtc
 pandas
 scikit-learn
 joblib
-mediapipe
 opencv-python

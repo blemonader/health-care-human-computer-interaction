@@ -2,9 +2,7 @@ import streamlit as st
 import pandas as pd
 import joblib
 from streamlit_webrtc import webrtc_streamer
-import mediapipe as mp
 import cv2
-
 # 加载你训练保存好的模型
 model = joblib.load("model.pkl")
 # 网页标题
@@ -15,25 +13,17 @@ st.write("输入生命体征以预测患者风险等级")
 if "has_face" not in st.session_state:
     st.session_state["has_face"] = False
 
-# 初始化MediaPipe人脸检测器
-mp_face_detection = mp.solutions.face_detection
-face_detector = mp_face_detection.FaceDetection(min_detection_confidence=0.5)
+# 加载opencv自带人脸检测器
+face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 
 def video_callback(frame):
     img = frame.to_ndarray(format="bgr24")
-    rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    result = face_detector.process(rgb_img)
-    st.session_state["has_face"] = bool(result.detections)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4)
+    st.session_state["has_face"] = len(faces) > 0
 
-    if result.detections:
-        for detection in result.detections:
-            bbox = detection.location_data.relative_bounding_box
-            h,w,_ = img.shape
-            x = int(bbox.xmin * w)
-            y = int(bbox.ymin * h)
-            w_box = int(bbox.width * w)
-            h_box = int(bbox.height * h)
-            cv2.rectangle(img,(x,y),(x+w_box,y+h_box),(0,255,0),2)
+    for (x,y,w_box,h_box) in faces:
+        cv2.rectangle(img,(x,y),(x+w_box,y+h_box),(0,255,0),2)
     return frame.from_ndarray(img,format="bgr24")
 
 # 侧边栏：用户输入各项生理指标
