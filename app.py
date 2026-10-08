@@ -5,25 +5,38 @@ from streamlit_webrtc import webrtc_streamer
 # import cv2
 
 # 加载模型
-model = joblib.load("model.pkl")
+model = joblib.load("best_model.pkl")
+scaler = joblib.load ("scaler.pkl")
 
 st.set_page_config(page_title="健康监测系统", layout="wide")
 
 # 左右分栏，left_panel和main_area是左右区域自定义名
-left_panel, main_area = st.columns([1, 3], border=True)
+left_panel, main_area = st.columns([1,1], border=True)
 
 with left_panel:
     st.header("输入生命体征数据")
+    
+    st.divider()
+    with st.expander("使用说明与操作提示", expanded=True):
+        st.write("1. 在左侧滑动条填写您的生命体征，下拉框选择吸氧、意识相关参数")
+        st.write("2. 点击【预测风险等级】获得结果")
+        st.write("3. 若体征录入有误，直接修改左侧滑块，再次点击预测即可重新计算")
+        st.write("4. 置信度较低时，代表当前指标处于风险类别交界，需要仔细核对输入数据")
+        
     Oxygen_Saturation = st.slider("血氧饱和度", min_value=80.0, max_value=100.0, value=94.0)
     Heart_Rate = st.slider("心率", min_value=40.0, max_value=180.0, value=80.0)
     Respiratory_Rate = st.slider("呼吸频率", min_value=8.0, max_value=30.0, value=16.0)
     Temperature = st.slider("体温", min_value=35.0, max_value=40.0, value=37.0)
     Systolic_BP = st.slider("收缩压", min_value=60.0, max_value=180.0, value=120.0)
-    On_Oxygen = st.selectbox("是否吸氧", [0,1])
-    O2_Scale = st.selectbox("供氧等级", [1,2])
-    Consciousness = st.selectbox("意识状态", [0,1])
+    On_Oxygen_text = st.selectbox("是否吸氧", ["否","是"])
+    O2_Scale_text = st.selectbox("供氧等级", ["低强度供氧","高强度供氧"])
+    Consciousness_text = st.selectbox("意识状态", ["清醒","异常"])
+    
     
 # 把用户输入，组装成DataFrame（和训练模型的输入格式保持一致！）
+On_Oxygen = 1 if On_Oxygen_text == "是" else 0
+O2_Scale = 1 if O2_Scale_text == "低强度供氧" else 2
+Consciousness = 1 if Consciousness_text == "异常" else 0
 input_data = pd.DataFrame({
     "Respiratory_Rate": [Respiratory_Rate],
     "Oxygen_Saturation": [Oxygen_Saturation],
@@ -41,10 +54,27 @@ with main_area:
     
     # 预测按钮
     if st.button("预测风险等级"):
-        pred = model.predict(input_data)
+        raw_input = input_data.values
+        input_scaled = scaler.transform(raw_input)
+        pred = model.predict(input_scaled)
+        pred_proba = model.predict_proba(input_scaled)
+        raw_confidence = max(pred_proba[0])*100
+        confidence = round(raw_confidence,2)
         st.subheader("预测结果")
         st.write(f"预测风险等级: {pred[0]}")
-    
+        st.write(f"置信度: {confidence}%")
+
+        st.write("【结果解释】")
+        if confidence < 70:
+            st.warning("提示：模型置信度偏低，该组生命体征处于类别边界，结果仅供参考，建议复核体征数据。")
+        elif 70 <= confidence < 90:
+            st.info("模型置信度中等，可结合其他临床信息综合判断。")
+        else:
+            st.success("模型置信度较高，本次预测参考价值较好。")
+
+        st.write("【适用范围说明】")
+        st.write("本模型仅为课程实训演示工具，仅基于基础生命体征进行风险分级，不能替代专业医生诊断。")
+        st.write("适用：基础生命体征快速初步筛查；不适用：急诊危重、多并发症患者的临床确诊。")
 
 
 # if "has_face" not in st.session_state:
