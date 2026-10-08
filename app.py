@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import joblib
 from streamlit_webrtc import webrtc_streamer
-import cv2
+# import cv2
 
 # 加载模型
 model = joblib.load("model.pkl")
