@@ -12,9 +12,9 @@ import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
 CSV_FILE_NAME = "fast_food_consumption_health_impact_dataset.csv"
-# 分类目标：Digestive_Issues；回归目标：BMI
+# 分类目标：Digestive_Issues；回归目标：Overall_Health_Score
 TARGET_CLS_COL = "Digestive_Issues"
-TARGET_REG_COL = "BMI"
+TARGET_REG_COL = "Overall_Health_Score"
 # 敏感属性
 SENS_COLS = ["Gender", "Age"]
 MODEL_LR_SAVE_PATH = "lr_cls_model.pkl"
@@ -93,13 +93,13 @@ print(classification_report(y_cls_test, y_cls_test_pred_rf, zero_division=0))
 print("\nConfusion Matrix(Test):")
 print(confusion_matrix(y_cls_test, y_cls_test_pred_rf))
 
-# ===================== 回归任务：BMI 线性回归 =====================
+# ===================== 回归任务：Overall_Health_Score 线性回归 =====================
 model_reg = LinearRegression()
 model_reg.fit(X_train_scaled, y_reg_train)
 
 # 验证集评估
 y_reg_val_pred = model_reg.predict(X_val_scaled)
-print("\n===== 线性回归 BMI回归任务(验证集) =====")
+print("\n===== 线性回归 Overall_Health_Score回归任务(验证集) =====")
 val_mae = mean_absolute_error(y_reg_val, y_reg_val_pred)
 val_rmse = np.sqrt(mean_squared_error(y_reg_val, y_reg_val_pred))
 print(f"Val MAE: {val_mae:.3f}")
@@ -109,7 +109,7 @@ print(f"Val RMSE: {val_rmse:.3f}")
 y_reg_test_pred = model_reg.predict(X_test_scaled)
 test_mae = mean_absolute_error(y_reg_test, y_reg_test_pred)
 test_rmse = np.sqrt(mean_squared_error(y_reg_test, y_reg_test_pred))
-print("\n===== 线性回归 BMI回归任务(测试集) =====")
+print("\n===== 线性回归 Overall_Health_Score回归任务(测试集) =====")
 print(f"Test MAE: {test_mae:.3f}")
 print(f"Test RMSE: {test_rmse:.3f}")
 
