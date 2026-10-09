@@ -5,9 +5,13 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, mean_absolute_error, mean_squared_error
+from sklearn.metrics import precision_score, recall_score, f1_score
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import StandardScaler
 import joblib
+import matplotlib.pyplot as plt
+plt.rcParams["font.sans-serif"] = ["SimHei"]
+plt.rcParams["axes.unicode_minus"] = False
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
@@ -127,3 +131,84 @@ joblib.dump(y_reg_test_pred, "y_reg_pred.pkl")
 joblib.dump(sens_test, "sens_test.pkl")
 
 print("\n所有模型与测试数据保存完成")
+
+
+# 提取逻辑回归分类测试指标
+lr_acc = accuracy_score(y_cls_test, y_cls_test_pred_lr)
+lr_macro_prec = precision_score(y_cls_test, y_cls_test_pred_lr, average="macro", zero_division=0)
+lr_macro_rec = recall_score(y_cls_test, y_cls_test_pred_lr, average="macro", zero_division=0)
+lr_macro_f1 = f1_score(y_cls_test, y_cls_test_pred_lr, average="macro", zero_division=0)
+lr_weighted_f1 = f1_score(y_cls_test, y_cls_test_pred_lr, average="weighted", zero_division=0)
+
+# 提取随机森林分类测试指标
+rf_acc = accuracy_score(y_cls_test, y_cls_test_pred_rf)
+rf_macro_prec = precision_score(y_cls_test, y_cls_test_pred_rf, average="macro", zero_division=0)
+rf_macro_rec = recall_score(y_cls_test, y_cls_test_pred_rf, average="macro", zero_division=0)
+rf_macro_f1 = f1_score(y_cls_test, y_cls_test_pred_rf, average="macro", zero_division=0)
+rf_weighted_f1 = f1_score(y_cls_test, y_cls_test_pred_rf, average="weighted", zero_division=0)
+
+# 图1：逻辑回归、随机森林 分类指标对比柱状图
+fig1, ax1 = plt.subplots(figsize=(10,6))
+metric_names = ["Accuracy", "Macro Precision", "Macro Recall", "Macro F1", "Weighted F1"]
+lr_metric_vals = [lr_acc, lr_macro_prec, lr_macro_rec, lr_macro_f1, lr_weighted_f1]
+rf_metric_vals = [rf_acc, rf_macro_prec, rf_macro_rec, rf_macro_f1, rf_weighted_f1]
+x = np.arange(len(metric_names))
+bar_width = 0.35
+ax1.bar(x - bar_width/2, lr_metric_vals, bar_width, label="逻辑回归")
+ax1.bar(x + bar_width/2, rf_metric_vals, bar_width, label="随机森林")
+ax1.set_ylim(0, 1.05)
+ax1.set_xticks(x)
+ax1.set_xticklabels(metric_names)
+ax1.set_title("逻辑回归与随机森林 分类指标对比(测试集)")
+ax1.legend()
+plt.tight_layout()
+plt.savefig("cls_model_compare.png")
+print("分类模型指标对比图 cls_model_compare.png 已保存")
+
+# 图2：两个分类模型混淆矩阵热力图，子图放一张图片
+fig2, (ax2_1, ax2_2) = plt.subplots(1,2, figsize=(10,4))
+cm_lr = confusion_matrix(y_cls_test, y_cls_test_pred_lr)
+cm_rf = confusion_matrix(y_cls_test, y_cls_test_pred_rf)
+im1 = ax2_1.imshow(cm_lr, cmap="Blues")
+im2 = ax2_2.imshow(cm_rf, cmap="Blues")
+ax2_1.set_title("逻辑回归 混淆矩阵")
+ax2_2.set_title("随机森林 混淆矩阵")
+ax2_1.set_xticks([0,1])
+ax2_1.set_yticks([0,1])
+ax2_2.set_xticks([0,1])
+ax2_2.set_yticks([0,1])
+ax2_1.set_xlabel("预测标签")
+ax2_1.set_ylabel("真实标签")
+ax2_2.set_xlabel("预测标签")
+# 在格子里填入数字
+for i in range(2):
+    for j in range(2):
+        ax2_1.text(j,i,str(cm_lr[i,j]),ha="center",va="center",color="black")
+        ax2_2.text(j,i,str(cm_rf[i,j]),ha="center",va="center",color="black")
+plt.tight_layout()
+plt.savefig("confusion_matrix_compare.png")
+print("混淆矩阵对比图 confusion_matrix_compare.png 已保存")
+
+# 图3：回归任务 真实值 vs 预测值散点图
+fig3, ax3 = plt.subplots(figsize=(7,7))
+ax3.scatter(y_reg_test, y_reg_test_pred, alpha=0.6)
+ax3.plot([y_reg_test.min(), y_reg_test.max()], [y_reg_test.min(), y_reg_test.max()], 'r--')
+ax3.set_xlabel("真实总体健康评分")
+ax3.set_ylabel("预测总体健康评分")
+ax3.set_title("线性回归：真实值-预测值散点图")
+plt.tight_layout()
+plt.savefig("reg_true_pred_scatter.png")
+print("回归真实预测散点图 reg_true_pred_scatter.png 已保存")
+
+# 图4：随机森林特征重要性
+fig4, ax4 = plt.subplots(figsize=(10,6))
+importances = model_rf.feature_importances_
+sorted_idx = np.argsort(importances)
+feature_names = X_train.columns
+ax4.barh(feature_names[sorted_idx], importances[sorted_idx])
+ax4.set_xlabel("特征重要性")
+ax4.set_title("随机森林 - 训练集特征重要性")
+plt.tight_layout()
+plt.savefig("rf_feature_importance.png")
+print("随机森林特征重要性图 rf_feature_importance.png 已保存")
+
