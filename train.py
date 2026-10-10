@@ -129,6 +129,13 @@ joblib.dump(y_cls_test_pred_lr, "y_cls_pred_lr.pkl")
 joblib.dump(y_cls_test_pred_rf, "y_cls_pred_rf.pkl")
 joblib.dump(y_reg_test_pred, "y_reg_pred.pkl")
 joblib.dump(sens_test, "sens_test.pkl")
+joblib.dump(X_train_scaled, "X_train_scaled.pkl")
+joblib.dump(X_val_scaled, "X_val_scaled.pkl")
+joblib.dump(X_test_scaled, "X_test_scaled.pkl")
+joblib.dump(y_cls_train, "y_cls_train.pkl")
+joblib.dump(y_cls_val, "y_cls_val.pkl")
+joblib.dump(sens_train, "sens_train.pkl")
+joblib.dump(sens_val, "sens_val.pkl")
 
 print("\n所有模型与测试数据保存完成")
 
