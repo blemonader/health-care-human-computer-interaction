@@ -127,15 +127,6 @@ base_eo = equalized_odds_difference(
 base_acc = accuracy_score(y_cls_val, y_val_pred_base)
 base_f1 = f1_score(y_cls_val, y_val_pred_base, average="binary", zero_division=0)
 
-results.append({
-    "constraint": "无约束基线",
-    "bound": None,
-    "val_accuracy": base_acc,
-    "val_f1": base_f1,
-    "val_eo": base_eo,
-    "model": base_model
-})
-
 print(f"\n无约束基线 - 验证集准确率: {base_acc:.4f}, F1: {base_f1:.4f}, EO差: {base_eo:.4f}")
 
 # 遍历不同约束强度
@@ -217,7 +208,12 @@ print(f"选择依据: EO差={best['val_eo']:.4f}, F1={best['val_f1']:.4f}")
 
 # 在测试集上评估最佳模型
 best_model = best["model"]
+print("best_model 类型:", type(best_model))
 y_test_pred_improved = best_model.predict(X_test_scaled)
+
+print("y_test_pred_improved 非零个数:", np.sum(y_test_pred_improved == 1))
+print("y_cls_pred_lr 非零个数:", np.sum(y_cls_pred_lr == 1))
+print("两者是否相同:", np.array_equal(y_test_pred_improved, y_cls_pred_lr))
 
 test_acc = accuracy_score(y_cls_test, y_test_pred_improved)
 test_f1 = f1_score(y_cls_test, y_test_pred_improved, average="binary", zero_division=0)
@@ -352,3 +348,174 @@ plt.suptitle("Fairlearn约束强度对比：按性别分组的TPR/FPR/预测正�
 plt.tight_layout()
 plt.savefig("fairness_constraint_group_compare.png", dpi=150)
 print("分组对比图已保存 fairness_constraint_group_compare.png")
+
+
+# ================== Bootstrap 置信区间分析 ==================
+
+def bootstrap_metrics(y_true, y_pred, sens, n_bootstrap=2000, seed=42):
+    """
+    在测试集上做 Bootstrap，估计整体指标和各组指标的 95% 置信区间。
+    返回一个字典，每个指标对应 (下界, 上界)。
+    """
+    rng = np.random.default_rng(seed)
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+    sens = np.asarray(sens)
+    n = len(y_true)
+
+    eo_list, dp_list, f1_list, acc_list = [], [], [], []
+    tpr_f_list, tpr_m_list, tpr_o_list = [], [], []
+    fpr_f_list, fpr_m_list, fpr_o_list = [], [], []
+    ppr_f_list, ppr_m_list, ppr_o_list = [], [], []
+
+    for _ in range(n_bootstrap):
+        idx = rng.integers(0, n, size=n)
+        yt, yp, s = y_true[idx], y_pred[idx], sens[idx]
+
+        # 若重采样后只有单一类别，跳过该次
+        if len(np.unique(yt)) < 2:
+            continue
+
+        eo_list.append(equalized_odds_difference(yt, yp, sensitive_features=s))
+        dp_list.append(demographic_parity_difference(yt, yp, sensitive_features=s))
+        f1_list.append(f1_score(yt, yp, average="binary", zero_division=0))
+        acc_list.append(accuracy_score(yt, yp))
+
+        for group, tpr_l, fpr_l, ppr_l in [
+            ("Female", tpr_f_list, fpr_f_list, ppr_f_list),
+            ("Male", tpr_m_list, fpr_m_list, ppr_m_list),
+            ("Other", tpr_o_list, fpr_o_list, ppr_o_list),
+        ]:
+            mask = (s == group)
+            if mask.sum() < 2:
+                continue
+            yt_g, yp_g = yt[mask], yp[mask]
+            if len(np.unique(yt_g)) < 2:
+                # 样本量不足或只有单一类别，无法可靠估计TPR/FPR
+                continue
+            tpr_l.append(recall_score(yt_g, yp_g, average="binary", zero_division=0))
+            fpr_l.append(1 - recall_score(yt_g, yp_g, pos_label=0, zero_division=0))
+            ppr_l.append(sum(yp_g == 1) / len(yp_g))
+
+    def ci(values):
+        if len(values) == 0:
+            return (np.nan, np.nan)
+        arr = np.array(values)
+        return (np.percentile(arr, 2.5), np.percentile(arr, 97.5))
+
+    return {
+        "EO差": ci(eo_list),
+        "DP差": ci(dp_list),
+        "F1": ci(f1_list),
+        "准确率": ci(acc_list),
+        "Female_TPR": ci(tpr_f_list),
+        "Male_TPR": ci(tpr_m_list),
+        "Other_TPR": ci(tpr_o_list),
+        "Female_FPR": ci(fpr_f_list),
+        "Male_FPR": ci(fpr_m_list),
+        "Other_FPR": ci(fpr_o_list),
+        "Female_预测正类比例": ci(ppr_f_list),
+        "Male_预测正类比例": ci(ppr_m_list),
+        "Other_预测正类比例": ci(ppr_o_list),
+    }
+
+
+print("\n===== Bootstrap 95%置信区间（基线模型：逻辑回归无约束） =====")
+ci_base = bootstrap_metrics(y_cls_test, y_cls_pred_lr, sens_test_gender)
+for k, v in ci_base.items():
+    print(f"{k}: [{v[0]:.4f}, {v[1]:.4f}]")
+
+print("\n===== Bootstrap 95%置信区间（改进模型：EqualizedOdds best） =====")
+ci_improved = bootstrap_metrics(y_cls_test, y_test_pred_improved, sens_test_gender)
+for k, v in ci_improved.items():
+    print(f"{k}: [{v[0]:.4f}, {v[1]:.4f}]")
+
+
+# ================== 基线 vs 改进 置信区间对比图 ==================
+metric_keys = ["EO差", "DP差", "F1", "准确率",
+               "Female_TPR", "Male_TPR", "Other_TPR",
+               "Female_FPR", "Male_FPR", "Other_FPR",
+               "Female_预测正类比例", "Male_预测正类比例", "Other_预测正类比例"]
+
+base_mid = [np.mean(ci_base[k]) if not np.isnan(ci_base[k][0]) else np.nan for k in metric_keys]
+base_err_low = [ci_base[k][0] for k in metric_keys]
+base_err_high = [ci_base[k][1] for k in metric_keys]
+imp_mid = [np.mean(ci_improved[k]) if not np.isnan(ci_improved[k][0]) else np.nan for k in metric_keys]
+imp_err_low = [ci_improved[k][0] for k in metric_keys]
+imp_err_high = [ci_improved[k][1] for k in metric_keys]
+
+x = np.arange(len(metric_keys))
+width = 0.35
+
+fig3, ax3 = plt.subplots(figsize=(16, 7))
+ax3.bar(x - width/2, base_mid, width, label="基线（无约束LR）", color="steelblue",
+        yerr=[np.array(base_mid) - np.array(base_err_low),
+              np.array(base_err_high) - np.array(base_mid)],
+        capsize=4)
+ax3.bar(x + width/2, imp_mid, width, label="改进（EqualizedOdds best）", color="darkorange",
+        yerr=[np.array(imp_mid) - np.array(imp_err_low),
+              np.array(imp_err_high) - np.array(imp_mid)],
+        capsize=4)
+ax3.set_xticks(x)
+ax3.set_xticklabels(metric_keys, rotation=30, ha="right")
+ax3.set_ylabel("指标值（误差棒为95%置信区间）")
+ax3.set_title("基线 vs 改进模型：Bootstrap 95%置信区间对比（测试集）")
+ax3.legend()
+plt.tight_layout()
+plt.savefig("bootstrap_ci_compare.png", dpi=150)
+print("Bootstrap置信区间对比图已保存 bootstrap_ci_compare.png")
+
+
+# ================== EO差与DP差的Bootstrap分布直方图 ==================
+# 单独画一张图，展示两个模型EO差和DP差的重采样分布，便于直观判断差异是否显著
+def bootstrap_distribution(y_true, y_pred, sens, metric_fn, n_bootstrap=2000, seed=42):
+    rng = np.random.default_rng(seed)
+    y_true, y_pred, sens = np.asarray(y_true), np.asarray(y_pred), np.asarray(sens)
+    n = len(y_true)
+    vals = []
+    for _ in range(n_bootstrap):
+        idx = rng.integers(0, n, size=n)
+        yt, yp, s = y_true[idx], y_pred[idx], sens[idx]
+        if len(np.unique(yt)) < 2:
+            continue
+        vals.append(metric_fn(yt, yp, s))
+    return np.array(vals)
+
+eo_base_dist = bootstrap_distribution(
+    y_cls_test, y_cls_pred_lr, sens_test_gender,
+    lambda yt, yp, s: equalized_odds_difference(yt, yp, sensitive_features=s)
+)
+eo_imp_dist = bootstrap_distribution(
+    y_cls_test, y_test_pred_improved, sens_test_gender,
+    lambda yt, yp, s: equalized_odds_difference(yt, yp, sensitive_features=s)
+)
+dp_base_dist = bootstrap_distribution(
+    y_cls_test, y_cls_pred_lr, sens_test_gender,
+    lambda yt, yp, s: demographic_parity_difference(yt, yp, sensitive_features=s)
+)
+dp_imp_dist = bootstrap_distribution(
+    y_cls_test, y_test_pred_improved, sens_test_gender,
+    lambda yt, yp, s: demographic_parity_difference(yt, yp, sensitive_features=s)
+)
+
+fig4, axes4 = plt.subplots(1, 2, figsize=(14, 5))
+axes4[0].hist(eo_base_dist, bins=30, alpha=0.6, label="基线", color="steelblue", density=True)
+axes4[0].hist(eo_imp_dist, bins=30, alpha=0.6, label="改进", color="darkorange", density=True)
+axes4[0].axvline(np.mean(eo_base_dist), color="steelblue", linestyle="--")
+axes4[0].axvline(np.mean(eo_imp_dist), color="darkorange", linestyle="--")
+axes4[0].set_title("EO差 Bootstrap 分布")
+axes4[0].set_xlabel("EO差")
+axes4[0].legend()
+
+axes4[1].hist(dp_base_dist, bins=30, alpha=0.6, label="基线", color="steelblue", density=True)
+axes4[1].hist(dp_imp_dist, bins=30, alpha=0.6, label="改进", color="darkorange", density=True)
+axes4[1].axvline(np.mean(dp_base_dist), color="steelblue", linestyle="--")
+axes4[1].axvline(np.mean(dp_imp_dist), color="darkorange", linestyle="--")
+axes4[1].set_title("DP差 Bootstrap 分布")
+axes4[1].set_xlabel("DP差")
+axes4[1].legend()
+
+plt.suptitle("基线 vs 改进：EO差与DP差的Bootstrap分布（测试集）")
+plt.tight_layout()
+plt.savefig("bootstrap_distribution.png", dpi=150)
+print("Bootstrap分布图已保存 bootstrap_distribution.png")
