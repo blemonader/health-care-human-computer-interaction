@@ -15,7 +15,7 @@ plt.rcParams["axes.unicode_minus"] = False
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
-CSV_FILE_NAME = "fast_food_consumption_health_impact_dataset.csv"
+CSV_FILE_NAME = "fast_food_health_cleaned.csv"
 # 分类目标：Digestive_Issues；回归目标：Overall_Health_Score
 TARGET_CLS_COL = "Digestive_Issues"
 TARGET_REG_COL = "Overall_Health_Score"
