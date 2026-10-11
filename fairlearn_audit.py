@@ -384,7 +384,6 @@ def bootstrap_metrics(y_true, y_pred, sens, n_bootstrap=2000, seed=42):
         for group, tpr_l, fpr_l, ppr_l in [
             ("Female", tpr_f_list, fpr_f_list, ppr_f_list),
             ("Male", tpr_m_list, fpr_m_list, ppr_m_list),
-            ("Other", tpr_o_list, fpr_o_list, ppr_o_list),
         ]:
             mask = (s == group)
             if mask.sum() < 2:
@@ -410,13 +409,10 @@ def bootstrap_metrics(y_true, y_pred, sens, n_bootstrap=2000, seed=42):
         "准确率": ci(acc_list),
         "Female_TPR": ci(tpr_f_list),
         "Male_TPR": ci(tpr_m_list),
-        "Other_TPR": ci(tpr_o_list),
         "Female_FPR": ci(fpr_f_list),
         "Male_FPR": ci(fpr_m_list),
-        "Other_FPR": ci(fpr_o_list),
         "Female_预测正类比例": ci(ppr_f_list),
         "Male_预测正类比例": ci(ppr_m_list),
-        "Other_预测正类比例": ci(ppr_o_list),
     }
 
 
@@ -433,9 +429,9 @@ for k, v in ci_improved.items():
 
 # ================== 基线 vs 改进 置信区间对比图 ==================
 metric_keys = ["EO差", "DP差", "F1", "准确率",
-               "Female_TPR", "Male_TPR", "Other_TPR",
-               "Female_FPR", "Male_FPR", "Other_FPR",
-               "Female_预测正类比例", "Male_预测正类比例", "Other_预测正类比例"]
+               "Female_TPR", "Male_TPR",
+               "Female_FPR", "Male_FPR",
+               "Female_预测正类比例", "Male_预测正类比例"]
 
 base_mid = [np.mean(ci_base[k]) if not np.isnan(ci_base[k][0]) else np.nan for k in metric_keys]
 base_err_low = [ci_base[k][0] for k in metric_keys]
